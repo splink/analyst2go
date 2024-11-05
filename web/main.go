@@ -2,7 +2,6 @@ package main
 
 import (
 	"bytes"
-	"encoding/base64"
 	"encoding/json"
 	"html/template"
 	"io/ioutil"
@@ -29,19 +28,20 @@ func main() {
 	// Load HTML templates from the templates directory
 	r.LoadHTMLGlob("templates/*")
 
-	// Route to display the HTML page with embedded SVG
+	// Route to display the HTML page with embedded Plotly chart
 	r.GET("/", func(c *gin.Context) {
 		// Define the Python code as a string
 		pythonCode := `
-import matplotlib.pyplot as plt
-import pandas as pd
+import plotly.express as px
 
-data = {'x': [1, 2, 3, 4, 5], 'y': [1, 4, 9, 16, 25]}
-df = pd.DataFrame(data)
+# Sample data
+data = {
+    'x': [1, 2, 3, 4, 5],
+    'y': [10, 15, 13, 17, 20]
+}
 
-fig, ax = plt.subplots()
-df.plot(x='x', y='y', ax=ax)
-ax.set_title('Sample Line Plot')
+# Generate Plotly figure
+fig = px.line(data, x="x", y="y", title="Sample Plotly Chart", template="simple_white")
 output = fig
 `
 
@@ -71,15 +71,9 @@ output = fig
 			log.Fatalf("Error decoding JSON response: %v", err)
 		}
 
-		// Decode the base64-encoded SVG
-		svgData, err := base64.StdEncoding.DecodeString(pythonResponse.Chart)
-		if err != nil {
-			log.Fatalf("Error decoding base64 SVG: %v", err)
-		}
-
-		// Pass the SVG data as a string to the template
+		// Pass the Plotly JSON data to the template
 		c.HTML(http.StatusOK, "index.html", gin.H{
-			"SVG": template.HTML(svgData), // Use template.HTML to render raw SVG
+			"PlotlyJSON": template.JS(pythonResponse.Chart), // Use template.JS to avoid escaping
 		})
 	})
 

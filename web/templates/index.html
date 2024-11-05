@@ -3,11 +3,49 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Embedded SVG Chart</title>
+    <title>Embedded Plotly Chart</title>
+    <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+    <style>
+        /* Responsive container with aspect ratio 16:9 */
+        #chartContainer {
+            position: relative;
+            width: 100%;
+            padding-top: 56.25%; /* 16:9 Aspect Ratio (9 / 16 = 0.5625) */
+        }
+
+        /* Inner div to hold the chart */
+        #plot {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+        }
+    </style>
 </head>
 <body>
-    <h1>Generated SVG Chart</h1>
-    <div>{{.SVG}}</div>
+    <h1>Generated Plotly Chart</h1>
+    <!-- Placeholder container for the Plotly chart -->
+    <div id="chartContainer">
+        <!-- Inner container takes full width and height -->
+        <div id="plot"></div>
+    </div>
+    <script>
+        // Parse the Plotly JSON data passed from the Go server
+        const plotlyData = {{ .PlotlyJSON }};
+	const config = {
+	    responsive: true,
+            displayModeBar: false,  // Disables the toolbar entirely
+            displaylogo: false      // Removes the "Produced with Plotly" button
+        };
+
+        // Chart layout options to enable "compare data on hover"
+        const layout = plotlyData.layout || {};  // Retrieve the existing layout or create an empty one
+        layout.hovermode = 'x unified';          // Set default hover behavior to "compare data on hover"
+
+        // Render the Plotly chart in the specified container
+        Plotly.newPlot("plot", plotlyData.data, plotlyData.layout, config);
+    </script>
 </body>
 </html>
 
