@@ -1,0 +1,13 @@
+version: "3.8"
+
+services:
+  analytics2go:
+    build:
+      context: ./analysis
+      dockerfile: Dockerfile
+    ports:
+      - "7000:8000"
+    environment:
+      - PYTHONUNBUFFERED=1
+    restart: unless-stopped
+
