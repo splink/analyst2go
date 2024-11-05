@@ -2,14 +2,31 @@ package main
 
 import (
 	"bytes"
+	"fmt"
+	"context"
+	"encoding/base64"
 	"encoding/json"
 	"html/template"
 	"io/ioutil"
 	"log"
+	"math"
 	"net/http"
+	"time"
 
 	"github.com/gin-gonic/gin"
+	openai "github.com/sashabaranov/go-openai"
 )
+
+const maxRetries = 5
+const apiKey = "YOUR_OPENAI_API_KEY"
+const pythonAPIURL = "http://localhost:7000/generate-chart/"
+
+// ChatGPTResponse represents the JSON structure returned by the ChatGPT API.
+type ChatGPTResponse struct {
+	Status  string                   `json:"status"`
+	Data    []map[string]interface{} `json:"data,omitempty"`
+	Message string                   `json:"message,omitempty"`
+}
 
 // PythonCodeRequest represents the JSON payload for the Python code request.
 type PythonCodeRequest struct {
@@ -45,7 +62,7 @@ fig = px.line(data, x="x", y="y", title="Sample Plotly Chart", template="simple_
 output = fig
 `
 
-		// Create the JSON payload
+		// Create the JSON payload for Python API
 		payload := PythonCodeRequest{Code: pythonCode}
 		payloadBytes, err := json.Marshal(payload)
 		if err != nil {
@@ -53,7 +70,7 @@ output = fig
 		}
 
 		// Send the request to the Python API
-		resp, err := http.Post("http://localhost:7000/generate-chart/", "application/json", bytes.NewBuffer(payloadBytes))
+		resp, err := http.Post(pythonAPIURL, "application/json", bytes.NewBuffer(payloadBytes))
 		if err != nil {
 			log.Fatalf("Error making request to Python API: %v", err)
 		}
@@ -75,6 +92,81 @@ output = fig
 		c.HTML(http.StatusOK, "index.html", gin.H{
 			"PlotlyJSON": template.JS(pythonResponse.Chart), // Use template.JS to avoid escaping
 		})
+	})
+
+	// New route to handle image upload and call ChatGPT for data extraction
+	r.POST("/upload", func(c *gin.Context) {
+		file, _, err := c.Request.FormFile("screenshot")
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Failed to read file"})
+			return
+		}
+		defer file.Close()
+
+		// Read file into a buffer
+		imageData, err := ioutil.ReadAll(file)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to read image data"})
+			return
+		}
+
+		// Base64 encode the image for JSON transmission
+		base64Image := base64.StdEncoding.EncodeToString(imageData)
+
+		// Create OpenAI client
+		client := openai.NewClient(apiKey)
+		ctx := context.Background()
+
+		// Configure the chat prompt
+		req := openai.ChatCompletionRequest{
+			Model: openai.GPT4,
+			Messages: []openai.ChatCompletionMessage{
+				{
+					Role:    "system",
+					Content: "You are a data extraction tool specialized in reading structured tables from images. " +
+						"Please identify and extract tabular data, and format it as a JSON array of rows, where each row contains key-value pairs. " +
+						"If headers are present, use them as keys. If no tabular data exists, respond with an error status and an explanatory message.",
+				},
+				{
+					Role:    "user",
+					Content: fmt.Sprintf("Extract data from this image: data:image/png;base64,%s", base64Image),
+				},
+			},
+		}
+
+		// Retry with exponential back-off on failure
+		var chatResponse ChatGPTResponse
+		success := false
+		for i := 0; i < maxRetries; i++ {
+			var resp openai.ChatCompletionResponse
+			resp, err = client.CreateChatCompletion(ctx, req)
+			if err == nil && len(resp.Choices) > 0 {
+				// Attempt to parse the response content as JSON
+				err = json.Unmarshal([]byte(resp.Choices[0].Message.Content), &chatResponse)
+				if err == nil && chatResponse.Status == "ok" {
+					success = true
+					break
+				}
+
+				// Check for an error status response indicating no data
+				if chatResponse.Status == "error" && chatResponse.Message == "No extractable data. This might not contain usable information." {
+					break
+				}
+			}
+
+			// Exponential back-off
+			log.Printf("Request failed: %v. Retrying in %d seconds...", err, int(math.Pow(2, float64(i))))
+			time.Sleep(time.Duration(math.Pow(2, float64(i))) * time.Second)
+		}
+
+		// Check if request succeeded
+		if !success {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to extract data after retries"})
+			return
+		}
+
+		// Return extracted data as JSON
+		c.JSON(http.StatusOK, chatResponse)
 	})
 
 	// Run the server on port 8080

@@ -21,20 +21,83 @@
             width: 100%;
             height: 100%;
         }
+
+        /* Image preview and output styles */
+        #imagePreview {
+            max-width: 300px;
+            max-height: 300px;
+            margin-top: 20px;
+            display: none;
+        }
+        #output {
+            margin-top: 20px;
+        }
     </style>
 </head>
 <body>
     <h1>Generated Plotly Chart</h1>
+    <p>Press <strong>Ctrl+V</strong> or <strong>Cmd+V</strong> to paste a screenshot.</p>
+
     <!-- Placeholder container for the Plotly chart -->
     <div id="chartContainer">
-        <!-- Inner container takes full width and height -->
         <div id="plot"></div>
     </div>
+
+    <!-- Image preview and output for the extracted data -->
+    <img id="imagePreview" src="" alt="Pasted Image Preview">
+    <div id="output"></div>
+
     <script>
+        // JavaScript for handling image paste and upload to backend
+        document.addEventListener('paste', async function (event) {
+            const items = (event.clipboardData || event.originalEvent.clipboardData).items;
+            let blob = null;
+
+            // Check if any pasted item is an image
+            for (let i = 0; i < items.length; i++) {
+                if (items[i].type.indexOf("image") === 0) {
+                    blob = items[i].getAsFile();
+                    break;
+                }
+            }
+
+            if (blob) {
+                // Display image preview
+                const preview = document.getElementById("imagePreview");
+                preview.src = URL.createObjectURL(blob);
+                preview.style.display = "block";
+
+                // Create a FormData object and append the image blob
+                const formData = new FormData();
+                formData.append("screenshot", blob);
+
+                // Send the image to the backend using fetch
+                try {
+                    const response = await fetch("/upload", {
+                        method: "POST",
+                        body: formData
+                    });
+
+                    if (!response.ok) {
+                        throw new Error(`Server error: ${response.statusText}`);
+                    }
+
+                    // Parse and handle the JSON response
+                    const result = await response.json();
+                    document.getElementById("output").innerHTML = `<h2>Extracted Data:</h2><pre>${JSON.stringify(result, null, 2)}</pre>`;
+                } catch (error) {
+                    console.error("Upload failed:", error);
+                    document.getElementById("output").innerHTML = `<h2>Error:</h2><p>${error.message}</p>`;
+                }
+            } else {
+                alert("Please paste an image.");
+            }
+        });
+
         // Parse the Plotly JSON data passed from the Go server
         const plotlyData = {{ .PlotlyJSON }};
-	const config = {
-	    responsive: true,
+        const config = {
+            responsive: true,
             displayModeBar: false,  // Disables the toolbar entirely
             displaylogo: false      // Removes the "Produced with Plotly" button
         };
@@ -44,7 +107,7 @@
         layout.hovermode = 'x unified';          // Set default hover behavior to "compare data on hover"
 
         // Render the Plotly chart in the specified container
-        Plotly.newPlot("plot", plotlyData.data, plotlyData.layout, config);
+        Plotly.newPlot("plot", plotlyData.data, layout, config);
     </script>
 </body>
 </html>
