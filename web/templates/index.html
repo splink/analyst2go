@@ -10,10 +10,9 @@
         #chartContainer {
             position: relative;
             width: 100%;
-            padding-top: 56.25%; /* 16:9 Aspect Ratio (9 / 16 = 0.5625) */
+            padding-top: 56.25%; /* 16:9 Aspect Ratio */
         }
 
-        /* Inner div to hold the chart */
         #plot {
             position: absolute;
             top: 0;
@@ -22,93 +21,145 @@
             height: 100%;
         }
 
-        /* Image preview and output styles */
         #imagePreview {
             max-width: 300px;
             max-height: 300px;
             margin-top: 20px;
             display: none;
         }
-        #output {
-            margin-top: 20px;
-        }
     </style>
 </head>
 <body>
-    <h1>Generated Plotly Chart</h1>
-    <p>Press <strong>Ctrl+V</strong> or <strong>Cmd+V</strong> to paste a screenshot.</p>
+<h1>Generated Plotly Chart</h1>
+<p>Press <strong>Ctrl+V</strong> or <strong>Cmd+V</strong> to paste a screenshot.</p>
 
-    <!-- Placeholder container for the Plotly chart -->
-    <div id="chartContainer">
-        <div id="plot"></div>
-    </div>
+<h3>Upload Excel/CSV File</h3>
 
-    <!-- Image preview and output for the extracted data -->
+<!-- Drop Zone for Drag-and-Drop -->
+<div id="dropZone" style="border: 2px dashed #ccc; padding: 20px; text-align: center;">
+    Drag and drop your Excel or CSV file here
+    <br>OR<br>
+    <label for="fileInput" style="cursor: pointer; color: blue; text-decoration: underline;">Select a file</label>
+    <input type="file" id="fileInput" accept=".csv, .xls, .xlsx" style="display: none;">
+</div>
+
+<!-- Form to submit to backend -->
+<form id="uploadForm-data" action="/uploadFile" method="post" enctype="multipart/form-data">
+    <input type="file" id="fileUploadInput" name="file" style="display:none;">
+</form>
+
+<!-- Form to submit the image data to the server -->
+<form id="uploadForm-image" action="/uploadImage" method="POST" enctype="multipart/form-data">
+    <!-- Hidden file input for the image data -->
+    <input type="file" id="imageFileInput" name="screenshot" style="display: none;">
     <img id="imagePreview" src="" alt="Pasted Image Preview">
-    <div id="output"></div>
+</form>
 
-    <script>
-        // JavaScript for handling image paste and upload to backend
-        document.addEventListener('paste', async function (event) {
-            const items = (event.clipboardData || event.originalEvent.clipboardData).items;
-            let blob = null;
+<!-- Placeholder container for the Plotly chart -->
+<div id="chartContainer">
+    <div id="plot"></div>
+</div>
 
-            // Check if any pasted item is an image
-            for (let i = 0; i < items.length; i++) {
-                if (items[i].type.indexOf("image") === 0) {
-                    blob = items[i].getAsFile();
-                    break;
-                }
-            }
+<div>
+    <p>Data: {{.Data}}</p>
+    <p>Code: {{.Code}}</p>
+</div>
 
-            if (blob) {
-                // Display image preview
-                const preview = document.getElementById("imagePreview");
-                preview.src = URL.createObjectURL(blob);
-                preview.style.display = "block";
+<script>
+    function dataFileUpload() {
+        const dropZone = document.getElementById('dropZone');
+        const fileInput = document.getElementById('fileInput');
 
-                // Create a FormData object and append the image blob
-                const formData = new FormData();
-                formData.append("screenshot", blob);
-
-                // Send the image to the backend using fetch
-                try {
-                    const response = await fetch("/upload", {
-                        method: "POST",
-                        body: formData
-                    });
-
-                    if (!response.ok) {
-                        throw new Error(`Server error: ${response.statusText}`);
-                    }
-
-                    // Parse and handle the JSON response
-                    const result = await response.json();
-                    document.getElementById("output").innerHTML = `<h2>Extracted Data:</h2><pre>${JSON.stringify(result, null, 2)}</pre>`;
-                } catch (error) {
-                    console.error("Upload failed:", error);
-                    document.getElementById("output").innerHTML = `<h2>Error:</h2><p>${error.message}</p>`;
-                }
-            } else {
-                alert("Please paste an image.");
-            }
+        // Drag-and-drop event listeners
+        dropZone.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            dropZone.style.borderColor = 'blue';
         });
 
+        dropZone.addEventListener('dragleave', () => {
+            dropZone.style.borderColor = '#ccc';
+        });
+
+        dropZone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            dropZone.style.borderColor = '#ccc';
+            const file = e.dataTransfer.files[0];
+            handleDataFileUpload(file);
+        });
+
+        fileInput.addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            handleDataFileUpload(file);
+        });
+
+        function handleDataFileUpload(file) {
+            if (!file) return;
+
+            const validExtensions = ['csv', 'xls', 'xlsx'];
+            const fileExtension = file.name.split('.').pop().toLowerCase();
+
+            if (validExtensions.includes(fileExtension)) {
+                const dataTransfer = new DataTransfer();
+                dataTransfer.items.add(file);
+                const fileUploadInput = document.getElementById("fileUploadInput");
+                fileUploadInput.files = dataTransfer.files;
+
+                document.getElementById("uploadForm-data").submit();
+            } else {
+                alert("Only Excel and CSV files are allowed.");
+            }
+        }
+    };
+
+
+    document.addEventListener('paste', function (event) {
+        const items = (event.clipboardData || event.originalEvent.clipboardData).items;
+        let blob = null;
+
+        // Check if any pasted item is an image
+        for (let i = 0; i < items.length; i++) {
+            if (items[i].type.indexOf("image") === 0) {
+                blob = items[i].getAsFile();
+                break;
+            }
+        }
+
+        if (blob) {
+            // Display image preview
+            const preview = document.getElementById("imagePreview");
+            preview.src = URL.createObjectURL(blob);
+            preview.style.display = "block";
+
+            // Add the blob as a file to the form's hidden input
+            const dataTransfer = new DataTransfer();
+            dataTransfer.items.add(blob);
+            const fileInput = document.getElementById("imageFileInput");
+            fileInput.files = dataTransfer.files;
+
+            // Submit the form to the server
+            document.getElementById("uploadForm-image").submit();
+        } else {
+            alert("Please paste an image.");
+        }
+    });
+
+    function renderChart() {
         // Parse the Plotly JSON data passed from the Go server
         const plotlyData = {{ .PlotlyJSON }};
         const config = {
             responsive: true,
-            displayModeBar: false,  // Disables the toolbar entirely
-            displaylogo: false      // Removes the "Produced with Plotly" button
+            displayModeBar: false,
+            displaylogo: false
         };
 
-        // Chart layout options to enable "compare data on hover"
-        const layout = plotlyData.layout || {};  // Retrieve the existing layout or create an empty one
-        layout.hovermode = 'x unified';          // Set default hover behavior to "compare data on hover"
+        const layout = plotlyData.layout || {};
+        layout.hovermode = 'x unified';
 
-        // Render the Plotly chart in the specified container
         Plotly.newPlot("plot", plotlyData.data, layout, config);
-    </script>
+    }
+
+    dataFileUpload();
+    renderChart();
+</script>
 </body>
 </html>
-
