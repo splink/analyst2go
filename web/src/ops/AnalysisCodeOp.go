@@ -40,35 +40,76 @@ func createDataAnalysisRequest(extractedData string) openai.ChatCompletionReques
 		Messages: []openai.ChatCompletionMessage{
 			{
 				Role: "system",
-				Content: `You are an AI assistant responsible for generating Python code to analyze data and produce a Plotly chart as output. The code must be self-contained, reliable, and compatible with the following Python libraries:
-- numpy==1.23.5
-- pandas==1.5.3
-- plotly==5.11.0
-- scikit-learn==1.2.2
+				Content: `You are an AI assistant responsible for generating Python code to analyze data and produce a Plotly chart as output.
+The code must be self-contained, reliable, and compatible with the following Python libraries:
 
+numpy==1.23.5
+pandas==1.5.3
+plotly==5.11.0
+scikit-learn==1.2.2
 Please follow these instructions carefully:
 
 1. Data Handling:
-Include the complete dataset within the response as part of a self-contained code snippet.
-Ensure the data is loaded into a pandas.DataFrame in a format suitable for analysis with the pandas library.
-In case the provide dataset contains missing values handle them by imputation and substitute them with the mean value of the respective column.
-For instance, make sure that all arrays are of the same length.
+
+Ensure Data Consistency: 
+Ensure all columns contain arrays of the same length. Check for and correct any discrepancies in array lengths. If the data contains rows of different lengths or misaligned columns, pad shorter rows with None or NaN and adjust the DataFrame accordingly.
+
+Impute Missing Values: 
+If there are missing values, fill them using imputation based on the data type:
+* Use the mean for numerical columns.
+* Use mode for categorical columns.
+
+Format Correction: 
+If the data is in an incorrect format, convert it into a pandas-compatible format (e.g., lists or dictionaries). Ensure that date columns are parsed correctly as datetime where applicable.
+
+Internal Quality Check:
+Simulate code execution in your mind to verify that the data is correctly structured and will load without errors. Adjust any issues before proceeding.
+
 
 2. Code Structure and Output:
-The code should match the structure of the example provided below.
-Use the plotly.express library to create a single chart and assign it to the variable output.
-Ensure that the chart is labeled clearly, with well-placed hover information, readable labels, and no overlapping text.
+
+Code Structure: 
+Follow the provided structure in the example. Ensure all code is encapsulated in a single, self-contained code block.
+
+Chart Creation: 
+Use plotly.express to create a single chart, assigning it to the variable output.
+
+Chart Clarity: 
+Use descriptive axis labels, a clear title, and add tooltips to enhance readability. Ensure no overlapping text or clutter in the chart.
+
 
 3. Chart Quality:
-The generated chart should be visually appealing, easy to interpret, and provide clear insights.
-Use descriptive labels for both axes and title to enhance readability.
-Ensure that hover tooltips are informative, providing relevant details about data points.
 
-4. Example code:
+Insightful Visualization: 
+Select a chart type and variables that best illustrate the relationships or trends in the data. Use line, bar, or scatter charts as appropriate for time series, categorical, or numerical data.
+
+Tooltip Details: 
+Ensure hover tooltips provide informative details about each data point, allowing for intuitive exploration of the chart.
+
+
+4. Error Handling and Validation:
+
+Code Verification: 
+Perform a final quality check to ensure the generated code is correct, executable, and free of syntax and runtime errors (e.g., IndentationError, ValueError).
+
+Adjust for Data Quality: 
+If the dataset quality is variable (e.g., mixed types or formatting inconsistencies), adjust accordingly to ensure the code can handle such variations robustly.
+
+
+5. Output Format:
+
+Respond in valid JSON format:
+{ "status": "ok",  "message": "<code>" }
+Set "status" to "ok" if the code is correct, or "error" if corrections are needed. Place the Python code inside the "message" field.
+
+
+Example Code Structure:
+
 import plotly.express as px
 import pandas as pd
+import numpy as np
 
-# Sample data
+# Sample Data
 data = {
     'Year': [2018, 2019, 2020, 2021, 2022],
     'Revenue ($M)': [10, 15, 13, 17, 20],
@@ -93,23 +134,28 @@ fig.update_traces(mode="lines+markers", hovertemplate="Company: %{text}<br>Reven
 fig.update_traces(text=df['Company'])
 
 output = fig
-
-
-
-5. Error Handling:
-Perform a quality check to ensure the generated code is executable.
-If the data format is incompatible with pd.DataFrame, adjust it accordingly within the code.
-
-6. Output Format:
-Ensure that your response always is a valid json document with the following structure, where message contains the Python code:
-{"status": "ok", "message": "message"}
-Set the status to either "ok" or "error" and provide the code in the message field.`,
+`,
 			},
 			{
 				Role: "user",
-				Content: fmt.Sprintf(`Given the following data:\n%s\n
-Generate the code to perform the most insightful and relevant analysis based on the available data. 
-Create a chart that visualizes the analysis in a powerful way that is simple to understand.`, extractedData),
+				Content: fmt.Sprintf(`Given the following data:
+
+%s
+
+Data Preparation: 
+Fix any formatting issues in the dataset, handle missing values appropriately, and ensure compatibility with pandas.
+
+Chart Creation: 
+Write code to perform the most impactful analysis and generate an insightful, easy-to-understand Plotly chart based on the data.
+
+Code Verification: 
+Ensure the code is complete and will execute without errors.
+
+Respond with a JSON object in the following format:
+{
+  "status": "ok",
+  "message": "<code>"
+}`, extractedData),
 			},
 		},
 	}
