@@ -41,9 +41,13 @@ RUN pip install --no-cache-dir \
 # Clean up unnecessary packages to reduce image size
 RUN apt-get purge -y libxml2-dev libxslt-dev && apt-get autoremove -y
 
+ENV UVICORN_LOG_LEVEL debug
+ENV UVICORN_RELOAD True
+ENV FASTAPI_DEBUG True
+
 # Expose port 8000 for the API
 EXPOSE 8000
 
 # Command to run the FastAPI app with Uvicorn
-CMD ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8000", "--log-level", "debug", "--reload"]
 
