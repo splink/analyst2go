@@ -10,6 +10,7 @@ type Operation interface {
 	Retries() int
 	Run(input interface{}) (output interface{}, err error)
 }
+
 type Pipeline struct {
 	steps   []Operation
 	results map[int]interface{}

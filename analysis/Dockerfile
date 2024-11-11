@@ -22,7 +22,8 @@ RUN pip install --no-cache-dir \
     numpy==1.23.5 \
     pandas==1.5.3 \
     plotly==5.11.0 \
-    scikit-learn==1.2.2
+    scikit-learn==1.2.2 \
+    python-multipart==0.0.6
 
 # Install additional data handling libraries for small datasets with pinned versions
 RUN pip install --no-cache-dir \

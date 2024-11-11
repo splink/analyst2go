@@ -29,11 +29,8 @@ func (op *ImageDataExtractionOp) Run(input interface{}) (interface{}, error) {
 		log.Println("Failed to extract data from image")
 		return nil, errors.New("failed to extract data from image")
 	}
-	if response.Status != "ok" {
-		return nil, errors.New("failed to extract data from image")
-	}
 
-	return response.Message, nil
+	return response, nil
 }
 
 func createImageExtractionRequest(base64Image string) openai.ChatCompletionRequest {

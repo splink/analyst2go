@@ -8,33 +8,35 @@ import (
 	"math"
 	"strings"
 	"time"
-	"web/src/model"
 	"web/src/util"
 )
 
 var maxRetries = 5
 
-func SendToGPTWithRetry(req openai.ChatCompletionRequest) (model.ChatGPTResponse, bool) {
+func SendToGPTWithRetry(req openai.ChatCompletionRequest) (string, bool) {
 	apiKey := util.Env("OPENAI_API_KEY")
 	client := openai.NewClient(apiKey)
 	ctx := context.Background()
 
-	var chatResponse model.ChatGPTResponse
 	for i := 0; i < maxRetries; i++ {
 		resp, err := client.CreateChatCompletion(ctx, req)
 		if err == nil && len(resp.Choices) > 0 {
 			content := fixJSON(resp.Choices[0].Message.Content)
-			err = json.Unmarshal([]byte(content), &chatResponse)
-			if err == nil && (chatResponse.Status == "ok" || chatResponse.Status == "error") {
-				return chatResponse, chatResponse.Status == "ok"
+			isValidJson := json.Valid([]byte(content))
+			if isValidJson {
+				return content, true
 			}
+			// JSON is invalid, so log and retry
+			log.Printf("Received invalid JSON. Retrying... (Attempt %d of %d)", i+1, maxRetries)
+		} else {
+			// Request failed for another reason, log and retry
+			log.Printf("Request failed: %v. Retrying in %d seconds... (Attempt %d of %d)", err, int(math.Pow(2, float64(i))), i+1, maxRetries)
 		}
 
-		log.Printf("Request failed: %v. Retrying in %d seconds...", err, int(math.Pow(2, float64(i))))
 		time.Sleep(time.Duration(math.Pow(2, float64(i))) * time.Second)
 	}
 
-	return chatResponse, false
+	return "", false
 }
 
 func fixJSON(s string) string {

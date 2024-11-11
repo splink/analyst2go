@@ -6,25 +6,34 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"io/ioutil"
+	"log"
+	"mime/multipart"
 	"net/http"
 	"web/src/model"
 )
 
-type ChartGenerationOp struct{}
+type ChartGenerationOp struct {
+	dataFile model.DataFile
+}
+
+func NewChartGenerationOp(dataFile model.DataFile) *ChartGenerationOp {
+	return &ChartGenerationOp{dataFile}
+}
 
 func (op *ChartGenerationOp) Retries() int {
 	return 2
 }
 
 func (op *ChartGenerationOp) Run(input interface{}) (interface{}, error) {
-	pythonCodeToRun, ok := input.(string)
+	code, ok := input.(string)
 	if !ok {
 		return nil, errors.New("invalid input type for ChartGenerationOp")
 	}
 
+	log.Println("Python code:\n", code)
+
 	// Run the python code to generate a chart
-	chart, err := executePythonCode(model.PythonCodeRequest{Code: pythonCodeToRun})
+	chart, err := executePythonCode(code, op.dataFile)
 	if err != nil {
 		return nil, err
 	}
@@ -33,25 +42,59 @@ func (op *ChartGenerationOp) Run(input interface{}) (interface{}, error) {
 
 const pythonAPIURL = "http://localhost:7000/generate-chart/"
 
-// executePythonCode sends Python code to a Python API for execution and returns the response or an error.
-func executePythonCode(request model.PythonCodeRequest) (model.PythonCodeResponse, error) {
-	payloadBytes, err := json.Marshal(request)
+func executePythonCode(code string, dataFile model.DataFile) (model.PythonCodeResponse, error) {
+	// Create a buffer to hold the multipart form data
+	var requestBody bytes.Buffer
+	writer := multipart.NewWriter(&requestBody)
+
+	// Add the code field to the form
+	codePart, err := writer.CreateFormField("code")
 	if err != nil {
-		return model.PythonCodeResponse{}, fmt.Errorf("error encoding JSON: %v", err)
+		return model.PythonCodeResponse{}, fmt.Errorf("error creating form field for code: %v", err)
+	}
+	_, err = codePart.Write([]byte(code))
+	if err != nil {
+		return model.PythonCodeResponse{}, fmt.Errorf("error writing code to form field: %v", err)
 	}
 
-	resp, err := http.Post(pythonAPIURL, "application/json", bytes.NewBuffer(payloadBytes))
+	// Add the file field using the file content in memory
+	filePart, err := writer.CreateFormFile("file", "data."+dataFile.Ext)
+	if err != nil {
+		return model.PythonCodeResponse{}, fmt.Errorf("error creating form file for upload: %v", err)
+	}
+	_, err = io.Copy(filePart, bytes.NewReader(dataFile.Data))
+	if err != nil {
+		return model.PythonCodeResponse{}, fmt.Errorf("error copying file data: %v", err)
+	}
+
+	// Close the writer to finalize the form
+	err = writer.Close()
+	if err != nil {
+		return model.PythonCodeResponse{}, fmt.Errorf("error closing writer: %v", err)
+	}
+
+	// Create the HTTP request with the multipart form data
+	req, err := http.NewRequest("POST", pythonAPIURL, &requestBody)
+	if err != nil {
+		return model.PythonCodeResponse{}, fmt.Errorf("error creating HTTP request: %v", err)
+	}
+	req.Header.Set("Content-Type", writer.FormDataContentType())
+
+	// Execute the request
+	client := &http.Client{}
+	resp, err := client.Do(req)
 	if err != nil {
 		return model.PythonCodeResponse{}, fmt.Errorf("error making request to Python API: %v", err)
 	}
 	defer func(Body io.ReadCloser) {
 		err := Body.Close()
 		if err != nil {
-			fmt.Println("error closing response body: ", err)
+			log.Println("Failed to close response body", err)
 		}
 	}(resp.Body)
 
-	body, err := ioutil.ReadAll(resp.Body)
+	// Read the response
+	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return model.PythonCodeResponse{}, fmt.Errorf("error reading response body: %v", err)
 	}
@@ -59,6 +102,7 @@ func executePythonCode(request model.PythonCodeRequest) (model.PythonCodeRespons
 		return model.PythonCodeResponse{}, fmt.Errorf("error from the python environment: %s", body)
 	}
 
+	// Parse the response
 	var pythonResponse model.PythonCodeResponse
 	if err := json.Unmarshal(body, &pythonResponse); err != nil {
 		return model.PythonCodeResponse{}, fmt.Errorf("error decoding JSON response: %v", err)
