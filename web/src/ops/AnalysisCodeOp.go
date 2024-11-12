@@ -75,7 +75,8 @@ Note that all column names are normalized. A column name is always in lower case
 
 
 2. Code Structure and Output:
-Follow the provided structure in the example. Ensure all code is encapsulated in a single, self-contained code block.
+Follow the provided structure in the example. Ensure all code is encapsulated in a single, self-contained code block. Do not write comments. 
+Make sure to produce Python code that can be executed without errors - Python requires correct indentation and syntax.
 Use plotly.express to create a chart based on the data in df, and assign the variable fig = px.bar(...) to the variable output, so the code ends with output = fig.
 
 

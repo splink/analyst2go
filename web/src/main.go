@@ -17,13 +17,16 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"web/src/db"
 	"web/src/model"
 	"web/src/ops"
+	"web/src/service"
 	"web/src/util"
 )
 
 func main() {
 	util.LoadEnvVars()
+	db.Init()
 
 	baseURL := util.Env("BASE_URL")
 	if strings.HasSuffix(baseURL, "/") {
@@ -105,6 +108,20 @@ func handleFile(c *gin.Context) {
 		c.String(http.StatusInternalServerError, "There is a problem with the file data: %v", err)
 		return
 	}
+
+	insightID, err := service.CreateInsight(1)
+	if err != nil {
+		log.Println("Failed to create insight:", err)
+		return
+	}
+	err = service.SaveInsightData(insightID, dataFile)
+	if err != nil {
+		log.Println("Failed to save insight data:", err)
+		return
+	}
+
+	c.String(http.StatusOK, "File uploaded successfully")
+	return
 
 	//TODO testing options
 	op := ops.DataAnalysisOptionsOp{}
